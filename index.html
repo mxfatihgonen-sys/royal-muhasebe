@@ -3488,58 +3488,189 @@ function saveDB(){
 }
 
 async function _doSave(){
-  if(_fsReady && _fsHandle){
-    _fsWriteNow();
-    return;
-  }
-  // Supabase'e kaydet
+  if(_fsReady && _fsHandle){ _fsWriteNow(); return; }
   try {
     const saves = [];
 
-    if(DB.tadilatlar?.length) {
-      const data = DB.tadilatlar.map(t => {
-        const {seriNo, isTipi, ...rest} = t;
-        return _lowerKeys({...rest, serino: seriNo, istipi: isTipi});
-      });
-      saves.push(_supabase.from('tadilatlar').upsert(data, {onConflict:'id'}));
-    }
-
-    if(DB.odemeler?.length) {
-      const odemelerData = DB.odemeler
-        .filter(o => o.id && !isNaN(Number(o.id)))
-        .map(o => {
-          const row = _lowerKeys(o);
-          // bigint alanları — uuid ise null yap
-          if(row.isno && isNaN(Number(row.isno))) row.isno = null;
-          if(row.tadilatid && isNaN(Number(row.tadilatid))) row.tadilatid = null;
-          return row;
-        });
-      if(odemelerData.length)
-        saves.push(_supabase.from('odemeler').upsert(odemelerData, {onConflict:'id'}));
-    }
-
-    if(DB.hesapDefteri?.length) {
-      saves.push(_supabase.from('hesap_defteri').upsert(
-        _prepArr(DB.hesapDefteri).map(h => { delete h.updated_at; return h; }),
-        {onConflict:'id'}
+    // ── TADILATLAR ──────────────────────────────────
+    if(DB.tadilatlar?.length){
+      saves.push(_supabase.from('tadilatlar').upsert(
+        DB.tadilatlar.map(t => ({
+          id:         t.id,
+          tarih:      t.tarih,
+          musteri:    t.musteri,
+          tel:        t.tel,
+          adres:      t.adres,
+          baslama:    t.baslama,
+          bitis:      t.bitis,
+          marka:      t.marka,
+          model:      t.model,
+          durum:      t.durum,
+          serino:     t.seriNo,
+          eksikler:   t.eksikler,
+          aciklama:   t.aciklama,
+          notlar:     t.notlar,
+          ustalar:    t.ustalar||[],
+          usta:       t.usta,
+          istipi:     t.isTipi,
+          malzemeler: t.malzemeler||[],
+          arsiv:      t.arsiv||false,
+        })), {onConflict:'id'}
       ));
     }
 
-    if(DB.cariFirmalar?.length)
-      saves.push(_supabase.from('cari_firmalar').upsert(_prepArr(DB.cariFirmalar), {onConflict:'id'}));
+    // ── ÖDEMELER ────────────────────────────────────
+    if(DB.odemeler?.length){
+      saves.push(_supabase.from('odemeler').upsert(
+        DB.odemeler
+          .filter(o => o.id && !isNaN(Number(o.id)))
+          .map(o => ({
+            id:           Number(o.id),
+            isno:         (!isNaN(Number(o.isNo)) && o.isNo!==null) ? Number(o.isNo) : null,
+            musteri:      o.musteri,
+            tc:           o.tc,
+            tutar:        o.tutar||0,
+            nakit:        o.nakit||0,
+            kart:         o.kart||0,
+            havale:       o.havale||0,
+            cek:          o.cek||0,
+            simdi:        o.simdi||0,
+            taksit:       o.taksit||0,
+            taksitodenen: o.taksitOdenen||0,
+            taksittutar:  o.taksitTutar||0,
+            toplamodenen: o.toplamOdenen||0,
+            havalebanka:  o.havaleBanka||null,
+            havaleref:    o.havaleRef||null,
+            cektarih:     o.cekTarih||null,
+            cekno:        o.cekNo||null,
+            cekdurum:     o.cekDurum||null,
+            vadeler:      o.vadeler||[],
+            vade:         o.vade||null,
+            kalan:        o.kalan||0,
+            durum:        o.durum,
+            not:          o.not||null,
+            tarih:        o.tarih,
+            taksitler:    o.taksitler||[],
+          })), {onConflict:'id'}
+      ));
+    }
 
-    if(DB.cariHareketler?.length)
-      saves.push(_supabase.from('cari_hareketler').upsert(_prepArr(DB.cariHareketler), {onConflict:'id'}));
+    // ── HESAP DEFTERİ ────────────────────────────────
+    if(DB.hesapDefteri?.length){
+      saves.push(_supabase.from('hesap_defteri').upsert(
+        _prepArr(DB.hesapDefteri).map(h => ({
+          id:        h.id,
+          tarih:     h.tarih,
+          tip:       h.tip,
+          kategori:  h.kategori,
+          tutar:     h.tutar||0,
+          aciklama:  h.aciklama,
+          otomatik:  h.otomatik||false,
+          kaynakid:  h.kaynakId||h.kaynakid||null,
+        })), {onConflict:'id'}
+      ));
+    }
 
-    if(DB.virmanlar?.length)
-      saves.push(_supabase.from('virmanlar').upsert(_prepArr(DB.virmanlar), {onConflict:'id'}));
+    // ── CARİ FİRMALAR ────────────────────────────────
+    if(DB.cariFirmalar?.length){
+      saves.push(_supabase.from('cari_firmalar').upsert(
+        _prepArr(DB.cariFirmalar).map(f => ({
+          id:         f.id,
+          ad:         f.ad,
+          sektor:     f.sektor||null,
+          yetkili:    f.yetkili||null,
+          tel:        f.tel||null,
+          email:      f.email||null,
+          adres:      f.adres||null,
+          notlar:     f.notlar||null,
+          not:        f.not||null,
+          arsivlendi: f.arsivlendi||false,
+        })), {onConflict:'id'}
+      ));
+    }
 
-    if(DB.personeller?.length)
-      saves.push(_supabase.from('personeller').upsert(_prepArr(DB.personeller), {onConflict:'id'}));
+    // ── CARİ HAREKETLER ──────────────────────────────
+    if(DB.cariHareketler?.length){
+      saves.push(_supabase.from('cari_hareketler').upsert(
+        _prepArr(DB.cariHareketler).map(h => ({
+          id:          h.id,
+          firmaid:     h.firmaId||h.firmaid||null,
+          tip:         h.tip,
+          tutar:       h.tutar||0,
+          tarih:       h.tarih,
+          yontem:      h.yontem||null,
+          belgeno:     h.belgeNo||h.belgeno||null,
+          aciklama:    h.aciklama,
+          isemriid:    h.isEmriId||h.isemriid||null,
+          hdyansitildi:h.hdYansitildi||h.hdyansitildi||false,
+          hdkaynakid:  h.hdKaynakId||h.hdkaynakid||null,
+          borc:        h.borc||0,
+          alacak:      h.alacak||0,
+        })), {onConflict:'id'}
+      ));
+    }
 
-    if(DB.personelIslemler?.length)
-      saves.push(_supabase.from('personel_islemler').upsert(_prepArr(DB.personelIslemler), {onConflict:'id'}));
+    // ── VİRMANLAR ────────────────────────────────────
+    if(DB.virmanlar?.length){
+      saves.push(_supabase.from('virmanlar').upsert(
+        _prepArr(DB.virmanlar).map(v => ({
+          id:           v.id,
+          tip:          v.tip,
+          tarih:        v.tarih,
+          tutar:        v.tutar||0,
+          kaynaktip:    v.kaynakTip||v.kaynaktip||null,
+          kaynakid:     v.kaynakId||v.kaynakid||null,
+          kaynakad:     v.kaynakAd||v.kaynakad||null,
+          hedeffiirmaid:v.hedefFirmaId||v.hedeffiirmaid||null,
+          hedefirmaad:  v.hedefFirmaAd||v.hedefirmaad||null,
+          odemeyontemi: v.odemeYontemi||v.odemeyontemi||null,
+          banka:        v.banka||null,
+          cekno:        v.cekNo||v.cekno||null,
+          aciklama:     v.aciklama||null,
+          kaynakodmeid: v.kaynakOdemeId||v.kaynakodmeid||null,
+          olusturma:    v.olusturma||null,
+        })), {onConflict:'id'}
+      ));
+    }
 
+    // ── PERSONELLER ──────────────────────────────────
+    if(DB.personeller?.length){
+      saves.push(_supabase.from('personeller').upsert(
+        _prepArr(DB.personeller).map(p => ({
+          id:        p.id,
+          ad:        p.ad,
+          pozisyon:  p.pozisyon||null,
+          tel:       p.tel||null,
+          hedefmaas: p.hedefMaas||p.hedefmaas||0,
+          baslama:   p.baslama||null,
+          not:       p.not||null,
+          pasif:     p.pasif||false,
+          eklenme:   p.eklenme||null,
+          maas:      p.maas||0,
+        })), {onConflict:'id'}
+      ));
+    }
+
+    // ── PERSONEL İŞLEMLERİ ───────────────────────────
+    if(DB.personelIslemler?.length){
+      saves.push(_supabase.from('personel_islemler').upsert(
+        _prepArr(DB.personelIslemler).map(p => ({
+          id:          p.id,
+          personelid:  p.personelId||p.personelid||null,
+          tip:         p.tip,
+          tutar:       p.tutar||0,
+          tarih:       p.tarih||null,
+          yontem:      p.yontem||null,
+          donem:       p.donem||null,
+          aciklama:    p.aciklama||null,
+          fisno:       p.fisNo||p.fisno||null,
+          hdyansitildi:p.hdYansitildi||p.hdyansitildi||false,
+          olusturma:   p.olusturma||null,
+        })), {onConflict:'id'}
+      ));
+    }
+
+    // ── JSON BLOB TABLOLAR ───────────────────────────
     saves.push(_supabase.from('tanimlar').upsert(
       [{id:'00000000-0000-0000-0000-000000000001', data: DB.tanimlar}], {onConflict:'id'}
     ));
@@ -3549,18 +3680,19 @@ async function _doSave(){
     saves.push(_supabase.from('usta_odemeleri').upsert(
       [{id:'00000000-0000-0000-0000-000000000001', data: DB.ustaOdemeleri}], {onConflict:'id'}
     ));
-    saves.push(_supabase.from('sayac').update({nextid: DB.nextId}).eq('id','00000000-0000-0000-0000-000000000001'));
+    saves.push(_supabase.from('sayac').update({nextid: DB.nextId})
+      .eq('id','00000000-0000-0000-0000-000000000001'));
 
     const results = await Promise.all(saves);
     const errors = results.filter(r => r.error).map(r => r.error.message);
-    if(errors.length) {
+    if(errors.length){
       console.error('Kayıt hataları:', errors);
-      toast('Bazı veriler kaydedilemedi: ' + errors[0], 'error');
+      toast('Kayıt hatası: ' + errors[0], 'error');
     } else {
       const szEl = document.getElementById('storage-size-indicator');
       if(szEl){ szEl.textContent = '☁ Kaydedildi'; szEl.style.color = 'var(--green)'; }
     }
-  } catch(e) {
+  } catch(e){
     console.error('saveDB hatası:', e);
     toast('Kayıt hatası: ' + e.message, 'error');
   }
