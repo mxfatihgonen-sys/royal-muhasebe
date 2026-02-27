@@ -3411,7 +3411,7 @@ async function loadDB(){
     if (personeller)      DB.personeller      = personeller;
     if (personelIslemler) DB.personelIslemler = personelIslemler;
     if (tanimlarRow?.length)   DB.tanimlar    = tanimlarRow[0].data;
-    if (sayacRow?.length)      DB.nextId      = sayacRow[0].nextId;
+    if (sayacRow?.length)      DB.nextId      = sayacRow[0].nextid;
 
     _migrateDB();
     const szEl = document.getElementById('storage-size-indicator');
@@ -3464,7 +3464,14 @@ async function _doSave(){
   try {
     // Basit tablolar — upsert
     if(DB.tadilatlar?.length) {
-      await _supabase.from('tadilatlar').upsert(DB.tadilatlar, {onConflict:'id'});
+      const tadilatlarData = DB.tadilatlar.map(t => ({
+        ...t,
+        serino: t.seriNo,
+        istipi: t.isTipi,
+        seriNo: undefined,
+        isTipi: undefined
+      }));
+      await _supabase.from('tadilatlar').upsert(tadilatlarData, {onConflict:'id'});
     }
     if(DB.odemeler?.length) {
       await _supabase.from('odemeler').upsert(DB.odemeler, {onConflict:'id'});
@@ -3492,7 +3499,7 @@ async function _doSave(){
     await _supabase.from('fiyatlar').upsert([{id: '00000000-0000-0000-0000-000000000001', data: DB.fiyatlar}], {onConflict:'id'});
     await _supabase.from('usta_odemeleri').upsert([{id: '00000000-0000-0000-0000-000000000001', data: DB.ustaOdemeleri}], {onConflict:'id'});
     // Sayac
-    await _supabase.from('sayac').update({nextId: DB.nextId}).gt('id','00000000-0000-0000-0000-000000000000');
+    await _supabase.from('sayac').update({nextid: DB.nextId}).gt('id','00000000-0000-0000-0000-000000000000');
     const szEl = document.getElementById('storage-size-indicator');
     if(szEl){ szEl.textContent = '☁ Kaydedildi'; szEl.style.color = 'var(--green)'; }
   } catch(e) {
