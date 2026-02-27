@@ -3486,9 +3486,28 @@ async function _doSave(){
       await _supabase.from('tadilatlar').upsert(tadilatlarData, {onConflict:'id'});
     }
     if(DB.odemeler?.length) {
-      await _supabase.from('odemeler').upsert(DB.odemeler, {onConflict:'id'});
+      const odemelerData = DB.odemeler.map(o => {
+        const {isNo, taksitOdenen, taksitTutar, havaleBanka, havaleRef, cekTarih, cekNo, cekDurum, ...rest} = o;
+        return {
+          ...rest,
+          isno: isNo,
+          taksitodenen: taksitOdenen,
+          taksittutar: taksitTutar,
+          havaleref: havaleRef,
+          cektarih: cekTarih,
+          cekno: cekNo,
+          cekdurum: cekDurum
+        };
+      });
+      await _supabase.from('odemeler').upsert(odemelerData, {onConflict:'id'});
     }
-    if(DB.hesapDefteri?.length) { await _supabase.from('hesap_defteri').upsert(_ensureUUIDs(DB.hesapDefteri), {onConflict:'id'}); }
+    if(DB.hesapDefteri?.length) {
+      const hdData = _ensureUUIDs(DB.hesapDefteri).map(h => {
+        const {kaynakId, ...rest} = h;
+        return {...rest, kaynakid: kaynakId};
+      });
+      await _supabase.from('hesap_defteri').upsert(hdData, {onConflict:'id'});
+    }
     if(DB.cariFirmalar?.length) { await _supabase.from('cari_firmalar').upsert(_ensureUUIDs(DB.cariFirmalar), {onConflict:'id'}); }
     if(DB.cariHareketler?.length) { await _supabase.from('cari_hareketler').upsert(_ensureUUIDs(DB.cariHareketler), {onConflict:'id'}); }
     if(DB.virmanlar?.length) { await _supabase.from('virmanlar').upsert(_ensureUUIDs(DB.virmanlar), {onConflict:'id'}); }
