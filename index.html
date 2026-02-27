@@ -3492,7 +3492,13 @@ async function _doSave(){
     if(DB.cariFirmalar?.length) { await _supabase.from('cari_firmalar').upsert(_ensureUUIDs(DB.cariFirmalar), {onConflict:'id'}); }
     if(DB.cariHareketler?.length) { await _supabase.from('cari_hareketler').upsert(_ensureUUIDs(DB.cariHareketler), {onConflict:'id'}); }
     if(DB.virmanlar?.length) { await _supabase.from('virmanlar').upsert(_ensureUUIDs(DB.virmanlar), {onConflict:'id'}); }
-    if(DB.personeller?.length) { await _supabase.from('personeller').upsert(_ensureUUIDs(DB.personeller), {onConflict:'id'}); }
+    if(DB.personeller?.length) {
+      const personelData = DB.personeller.map(p => {
+        const {hedefMaas, ...rest} = p;
+        return {...rest, hedefmaas: hedefMaas};
+      });
+      await _supabase.from('personeller').upsert(_ensureUUIDs(personelData), {onConflict:'id'});
+    }
     if(DB.personelIslemler?.length) { await _supabase.from('personel_islemler').upsert(_ensureUUIDs(DB.personelIslemler), {onConflict:'id'}); }
     // JSON blob tablolar
     await _supabase.from('tanimlar').upsert([{id: '00000000-0000-0000-0000-000000000001', data: DB.tanimlar}], {onConflict:'id'});
