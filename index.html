@@ -3113,7 +3113,7 @@ function openVirmanModal(tip, kaynakId) {
   // Bilgi kutusunu doldur
   const infoBox = document.getElementById('vrm-info-box');
   if (tip === 'musteri') {
-    const odeme = (DB.odemeler || []).find(o => o.id === kaynakId);
+    const odeme = (DB.odemeler || []).find(o => String(o.id) === String(kaynakId));
     if (!odeme) { toast('Ödeme bulunamadı', 'error'); return; }
     const mevcutVirman = (DB.virmanlar || [])
       .filter(v => v.kaynakOdemeId === kaynakId)
@@ -3180,7 +3180,7 @@ function virmanTutarHint() {
   const ozet = document.getElementById('vrm-ozet');
 
   if (tip === 'musteri' && tutar > 0) {
-    const odeme = (DB.odemeler || []).find(o => o.id === kaynakId);
+    const odeme = (DB.odemeler || []).find(o => String(o.id) === String(kaynakId));
     if (odeme && tutar > (odeme.kalan || 0)) {
       document.getElementById('vrm-tutar-hint').innerHTML =
         `<span style="color:var(--red)">⚠ Kalan borçtan (${fmt(odeme.kalan)}) fazla olamaz</span>`;
@@ -3194,7 +3194,7 @@ function virmanTutarHint() {
     const yontem = document.querySelector('input[name="vrm-yontem"]:checked')?.value || 'Nakit';
     ozet.style.display = 'block';
     if (tip === 'musteri') {
-      const odeme = (DB.odemeler || []).find(o => o.id === kaynakId);
+      const odeme = (DB.odemeler || []).find(o => String(o.id) === String(kaynakId));
       ozet.innerHTML = `
         <div style="font-weight:700;margin-bottom:8px;color:var(--purple)">⇄ Virman Özeti</div>
         <div>📤 <strong>${esc(odeme?.musteri || '?')}</strong> borcundan <strong>${fmt(tutar)}</strong> düşülür</div>
@@ -3233,7 +3233,7 @@ function saveVirman() {
   if (!hedefFirma) { toast('Hedef firma bulunamadı', 'error'); return; }
 
   if (tip === 'musteri') {
-    const odeme = (DB.odemeler || []).find(o => o.id === kaynakId);
+    const odeme = (DB.odemeler || []).find(o => String(o.id) === String(kaynakId));
     if (!odeme) { toast('Ödeme kaydı bulunamadı', 'error'); return; }
     if (tutar > (odeme.kalan || 0)) {
       toast(`Tutar, kalan borçtan (${fmt(odeme.kalan)}) fazla olamaz`, 'error'); return;
@@ -3262,7 +3262,7 @@ function saveVirman() {
     DB.virmanlar.push(vrm);
 
     // Ödeme kalanını güncelle
-    const odemeIdx = DB.odemeler.findIndex(o => o.id === kaynakId);
+    const odemeIdx = DB.odemeler.findIndex(o => String(o.id) === String(kaynakId));
     if (odemeIdx >= 0) {
       DB.odemeler[odemeIdx].kalan = Math.max(0, (DB.odemeler[odemeIdx].kalan || 0) - tutar);
       DB.odemeler[odemeIdx].toplamOdenen = (DB.odemeler[odemeIdx].toplamOdenen || 0) + tutar;
@@ -3366,7 +3366,7 @@ async function deleteVirman(virmanId) {
 
   // Müşteri ödeme bakiyesini geri al
   if (vrm.tip === 'musteri_firma' && vrm.kaynakOdemeId) {
-    const idx = (DB.odemeler || []).findIndex(o => o.id === vrm.kaynakOdemeId);
+    const idx = (DB.odemeler || []).findIndex(o => String(o.id) === String(vrm.kaynakOdemeId));
     if (idx >= 0) {
       DB.odemeler[idx].kalan = (DB.odemeler[idx].kalan || 0) + vrm.tutar;
       DB.odemeler[idx].toplamOdenen = Math.max(0, (DB.odemeler[idx].toplamOdenen || 0) - vrm.tutar);
@@ -3432,18 +3432,68 @@ async function loadDB(){
       _supabase.from('sayac').select('*').limit(1)
     ]);
 
-    if (tadilatlar)       DB.tadilatlar       = tadilatlar;
-    if (odemeler)         DB.odemeler         = odemeler;
-    if (fiyatlarRow?.length)   DB.fiyatlar    = fiyatlarRow[0].data;
+    // Supabase küçük harf → kod camelCase normalizasyonu
+    if (tadilatlar)       DB.tadilatlar = tadilatlar.map(t => ({
+      ...t,
+      seriNo:    t.serino,
+      isTipi:    t.istipi,
+      ustalar:   t.ustalar || [],
+      malzemeler:t.malzemeler || [],
+    }));
+    if (odemeler)         DB.odemeler = odemeler.map(o => ({
+      ...o,
+      isNo:         o.isno,
+      taksitOdenen: o.taksitodenen,
+      taksitTutar:  o.taksittutar,
+      toplamOdenen: o.toplamodenen,
+      havaleBanka:  o.havalebanka,
+      havaleRef:    o.havaleref,
+      cekTarih:     o.cektarih,
+      cekNo:        o.cekno,
+      cekDurum:     o.cekdurum,
+      vadeler:      o.vadeler || [],
+      taksitler:    o.taksitler || [],
+    }));
+    if (fiyatlarRow?.length)   DB.fiyatlar      = fiyatlarRow[0].data;
     if (ustaOdRow?.length)     DB.ustaOdemeleri = ustaOdRow[0].data;
-    if (hesapDefteri)     DB.hesapDefteri     = hesapDefteri;
-    if (cariFirmalar)     DB.cariFirmalar     = cariFirmalar;
-    if (cariHareketler)   DB.cariHareketler   = cariHareketler;
-    if (virmanlar)        DB.virmanlar        = virmanlar;
-    if (personeller)      DB.personeller      = personeller;
-    if (personelIslemler) DB.personelIslemler = personelIslemler;
-    if (tanimlarRow?.length)   DB.tanimlar    = tanimlarRow[0].data;
-    if (sayacRow?.length)      DB.nextId      = sayacRow[0].nextid;
+    if (hesapDefteri)     DB.hesapDefteri = hesapDefteri.map(h => ({
+      ...h,
+      kaynakId: h.kaynakid,
+    }));
+    if (cariFirmalar)     DB.cariFirmalar = cariFirmalar;
+    if (cariHareketler)   DB.cariHareketler = cariHareketler.map(h => ({
+      ...h,
+      firmaId:     h.firmaid,
+      belgeNo:     h.belgeno,
+      isEmriId:    h.isemriid,
+      hdYansitildi:h.hdyansitildi,
+      hdKaynakId:  h.hdkaynakid,
+      virmanId:    h.virmanid,
+    }));
+    if (virmanlar)        DB.virmanlar = virmanlar.map(v => ({
+      ...v,
+      kaynakTip:    v.kaynaktip,
+      kaynakId:     v.kaynakid,
+      kaynakAd:     v.kaynakad,
+      hedefFirmaId: v.hedeffiirmaid,
+      hedefFirmaAd: v.hedefirmaad,
+      odemeYontemi: v.odemeyontemi,
+      cekNo:        v.cekno,
+      kaynakOdemeId:v.kaynakodmeid,
+    }));
+    if (personeller)      DB.personeller = personeller.map(p => ({
+      ...p,
+      hedefMaas: p.hedefmaas,
+    }));
+    if (personelIslemler) DB.personelIslemler = personelIslemler.map(p => ({
+      ...p,
+      personelId:   p.personelid,
+      fisNo:        p.fisno,
+      hdYansitildi: p.hdyansitildi,
+      hdKaynakId:   p.hdkaynakid||null,
+    }));
+    if (tanimlarRow?.length)   DB.tanimlar = tanimlarRow[0].data;
+    if (sayacRow?.length)      DB.nextId   = sayacRow[0].nextid;
 
     _migrateDB();
     const szEl = document.getElementById('storage-size-indicator');
@@ -3604,6 +3654,7 @@ async function _doSave(){
           isemriid:    h.isEmriId||h.isemriid||null,
           hdyansitildi:h.hdYansitildi||h.hdyansitildi||false,
           hdkaynakid:  h.hdKaynakId||h.hdkaynakid||null,
+          virmanid:    h.virmanId||h.virmanid||null,
           borc:        h.borc||0,
           alacak:      h.alacak||0,
         })), {onConflict:'id'}
@@ -3665,6 +3716,7 @@ async function _doSave(){
           aciklama:    p.aciklama||null,
           fisno:       p.fisNo||p.fisno||null,
           hdyansitildi:p.hdYansitildi||p.hdyansitildi||false,
+          hdkaynakid:  p.hdKaynakId||p.hdkaynakid||null,
           olusturma:   p.olusturma||null,
         })), {onConflict:'id'}
       ));
@@ -4142,7 +4194,7 @@ function saveTadilat(){
     if(t) Object.assign(t, obj);
     toast('Kayıt güncellendi','success');
     if((obj.durum==='Tamamlandı')){
-      const mevcutOdm=DB.odemeler.find(o=>o.isNo===editingId);
+      const mevcutOdm=DB.odemeler.find(o=>o.isNo!=null && Number(o.isNo)===editingId);
       if(!mevcutOdm){
         setTimeout(()=>toast('💳 İş tamamlandı — ödeme kaydı henüz yok!','warning'),500);
       } else if(mevcutOdm.kalan>0){
@@ -4235,7 +4287,7 @@ function initOdmForm(){
     const o=DB.odemeler.find(o=>o.id===editingOdmId);
     if(!o) return;
     sf('f-odm-isno').value=o.isNo||'';
-    sf('f-odm-musteri').value=getMusteri(o.isNo)||o.musteri||'';
+    sf('f-odm-musteri').value=(o.isNo!=null?getMusteri(o.isNo):'')||o.musteri||'';
     sf('f-odm-tc').value=o.tc||'';
     sf('f-odm-tutar').value=o.tutar||'';
     sf('f-odm-nakit').value=o.nakit||'';
@@ -4345,7 +4397,7 @@ function renderIsSecList(){
     return;
   }
   box.innerHTML=list.map(t=>{
-    const odm=DB.odemeler.find(o=>o.isNo===t.id);
+    const odm=DB.odemeler.find(o=>o.isNo!=null && Number(o.isNo)===t.id);
     const op=odm?(odm.kalan<=0?'<span class="badge badge-green" style="font-size:10px">✓ Ödendi</span>':'<span class="badge badge-red" style="font-size:10px">Bakiye Var</span>'):'<span class="badge" style="font-size:10px">Ödeme Yok</span>';
     return `<div onclick="selectIsNo(${t.id})"
       style="padding:10px 12px;border-bottom:1px solid var(--border2);cursor:pointer;display:flex;align-items:center;gap:12px"
@@ -4402,7 +4454,7 @@ async function saveOdeme(){
 
   if(editingOdmId===null){
     const isNo=parseInt(g('f-odm-isno'));
-    const mevcutOdeme=DB.odemeler.find(o=>o.isNo===isNo);
+    const mevcutOdeme=DB.odemeler.find(o=>o.isNo!=null && Number(o.isNo)===Number(isNo));
     if(mevcutOdeme){
       const ok = await customConfirm(`İş No #${isNo} için zaten bir ödeme kaydı var. Güncelleme yapmak için o kaydı düzenleyin. Yine de yeni kayıt eklemek istiyor musunuz?`, 'Mükerrer Kayıt', '+ Yeni Kayıt Ekle', false);
       if(!ok) return;
@@ -4432,6 +4484,7 @@ async function saveOdeme(){
     isNo:parseInt(g('f-odm-isno')),
     musteri:g('f-odm-musteri')||getMusteri(g('f-odm-isno')),
     tc:g('f-odm-tc'),
+    tarih:(()=>{ const _is=DB.tadilatlar.find(t=>t.id===parseInt(g('f-odm-isno'))); return _is?(_is.tarih||today()):today(); })(),
     tutar,nakit,kart,havale,cek,simdi,
     taksit,taksitOdenen,
     taksitTutar:taksit>0&&kart>0?kart/taksit:0,
@@ -4476,7 +4529,18 @@ function renderDashboard(){
   const now=today();
   odmList.forEach(o=>{
     toplamFatura+=(o.tutar||0); toplamTahsilat+=(o.toplamOdenen||0); toplamKalan+=(o.kalan||0);
-    if(o.vade&&o.kalan>0){ const d=diffDays(o.vade); if(d<0) gecikmiş++; else if(d<=7) buHaftaVade++; }
+    if(o.kalan>0){
+      // Tüm vade kaynaklarını topla: ana vade, çek tarihi, çoklu vadeler
+      const vadeTarihleri = [];
+      if(o.vade) vadeTarihleri.push(o.vade);
+      if(o.cek>0 && o.cekTarih && (!o.cekDurum || o.cekDurum==='Beklemede')) vadeTarihleri.push(o.cekTarih);
+      (o.vadeler||[]).forEach(v=>{ if(v.tarih) vadeTarihleri.push(v.tarih); });
+      vadeTarihleri.forEach(vt=>{
+        const d=diffDays(vt);
+        if(d<0) gecikmiş++;
+        else if(d<=7) buHaftaVade++;
+      });
+    }
   });
   tadList.forEach(t=>{ if(t.tarih?.slice(0,7)===thisMonth) thisMonthCount++; });
 
@@ -4564,12 +4628,18 @@ function widgetSonIsler(){
 }
 
 function widgetGecikmiş(){
-  const gec=DB.odemeler.filter(o=>o.vade&&diffDays(o.vade)<0&&o.kalan>0).slice(0,6);
+  const gec=DB.odemeler.filter(o=>{
+    if(!(o.kalan>0)) return false;
+    if(o.vade && diffDays(o.vade)<0) return true;
+    if(o.cek>0 && o.cekTarih && (!o.cekDurum||o.cekDurum==='Beklemede') && diffDays(o.cekTarih)<0) return true;
+    if((o.vadeler||[]).some(v=>v.tarih && diffDays(v.tarih)<0)) return true;
+    return false;
+  }).slice(0,6);
   const rows=gec.length===0
     ?'<tr><td colspan="4" class="tbl-empty" style="color:var(--green)">✓ Gecikmiş ödeme yok</td></tr>'
     :gec.map(o=>`<tr>
       <td class="mono text-red">#${o.isNo}</td>
-      <td>${esc(o.musteri||getMusteri(o.isNo))||'—'}</td>
+      <td>${esc(o.musteri||(o.isNo!=null?getMusteri(o.isNo):''))||'—'}</td>
       <td class="text-red font-mono">${fmt(o.kalan)}</td>
       <td>${vadeBadge(o.vade,o.kalan)}</td>
     </tr>`).join('');
@@ -4735,7 +4805,7 @@ function renderTadilatlar(){
           <span class="text-xs text-muted">${esc(u.isTipi)||''}</span>
           ${u.fiyat>0?`<span class="text-xs" style="color:var(--green);font-family:var(--mono)">${fmt(u.fiyat)}</span>`:''}
         </div>`).join('');
-      const odmT=DB.odemeler.find(o=>o.isNo===t.id);
+      const odmT=DB.odemeler.find(o=>o.isNo!=null && Number(o.isNo)===t.id);
       const odmHtml=odmT
         ? `<div class="mono text-xs font-bold ${odmT.kalan>0?'text-red':'text-green'}">${odmT.kalan>0?'-'+fmt(odmT.kalan)+' kalan':'✓ Ödendi'}</div>
            <div class="text-xs text-muted">${fmt(odmT.toplamOdenen||0)} / ${fmt(odmT.tutar||0)}</div>`
@@ -4778,7 +4848,7 @@ function renderTadilatlar(){
 function editTadilat(id){ editingId=id; openModal('modal-tad'); }
 
 function openOdemeFromIs(isNo){
-  const mevcutOdeme = DB.odemeler.find(o=>o.isNo===isNo);
+  const mevcutOdeme = DB.odemeler.find(o=>o.isNo!=null && Number(o.isNo)===Number(isNo));
   if(mevcutOdeme){
     editingOdmId = mevcutOdeme.id;
   } else {
@@ -4792,7 +4862,7 @@ function openOdemeFromIs(isNo){
 async function arsivleTadilat(id){
   const t = DB.tadilatlar.find(x=>x.id===id);
   if(!t) return;
-  const ilgiliOdeme = DB.odemeler.find(o=>o.isNo===id);
+  const ilgiliOdeme = DB.odemeler.find(o=>o.isNo!=null && Number(o.isNo)===id);
   let mesaj = 'Bu iş emri arşive taşınsın mı?';
   if(ilgiliOdeme && !ilgiliOdeme.arsiv) mesaj += ' Bağlı ödeme kaydı aktif kalacak.';
   const ok = await customConfirm(mesaj, 'Arşivle', '🗄 Arşive Taşı');
@@ -4809,7 +4879,7 @@ function geriAlTadilat(id){
 }
 
 async function kaliciSilTadilat(id){
-  const ilgiliOdeme = DB.odemeler.find(o=>o.isNo===id);
+  const ilgiliOdeme = DB.odemeler.find(o=>o.isNo!=null && Number(o.isNo)===id);
   let mesaj = 'Bu iş emri kalıcı silinsin mi? Bu işlem geri alınamaz.';
   if(ilgiliOdeme) mesaj += ' Bağlı ödeme kaydı silinmeyecek.';
   const ok = await customConfirm(mesaj, 'Kalıcı Sil', '🗑 Kalıcı Sil', true);
@@ -4913,7 +4983,7 @@ function renderOdemeler(){
   }
 
   tbody.innerHTML=page.map(o=>{
-    const musteri=o.musteri||musteriMap.get(o.isNo)||'—';
+    const musteri=o.musteri||(o.isNo!=null?musteriMap.get(Number(o.isNo)):'')||'—';
     const taksit=o.taksit||0;
     const taksitOdenen=o.taksitOdenen||0;
     const taksitPct=taksit>0?Math.round(taksitOdenen/taksit*100):0;
@@ -4953,7 +5023,7 @@ function renderOdemeler(){
       </td>
       <td class="text-sm">${cekHtml}</td>
       <td class="text-sm text-muted">${o.simdi>0?`<div>Şimdi: ${fmt(o.simdi)}</div>${vadeTxt!=='—'?`<div class="text-xs">Vade: ${vadeTxt}</div>`:''}`:(vadeTxt!=='—'?vadeTxt:'—')}</td>
-      <td class="mono font-bold ${o.kalan>0?'text-red':'text-green'}">${fmt(o.kalan)}${(()=>{const vl=(DB.virmanlar||[]).filter(v=>v.kaynakOdemeId===o.id);return vl.length>0?`<div class="text-xs" style="color:var(--purple);font-weight:400">⇄ ${fmt(vl.reduce((s,v)=>s+(v.tutar||0),0))}</div>`:''})()}</td>
+      <td class="mono font-bold ${o.kalan>0?'text-red':'text-green'}">${fmt(o.kalan)}${(()=>{const vl=(DB.virmanlar||[]).filter(v=>v.kaynakOdemeId!=null && String(v.kaynakOdemeId)===String(o.id));return vl.length>0?`<div class="text-xs" style="color:var(--purple);font-weight:400">⇄ ${fmt(vl.reduce((s,v)=>s+(v.tutar||0),0))}</div>`:''})()}</td>
       <td>${vadeBadge(o.vade,o.kalan)}</td>
       <td>${odemeBadge(o.durum)}</td>
       <td>
@@ -5329,7 +5399,7 @@ function renderAylik(){
     const dev=tList.filter(t=>t.durum==='Devam Ediyor').length;
     const bek=tList.filter(t=>t.durum==='Beklemede').length;
     const isNos=new Set(tList.map(t=>t.id));
-    const aOdm=DB.odemeler.filter(o=>isNos.has(o.isNo));
+    const aOdm=DB.odemeler.filter(o=>o.isNo!=null && isNos.has(Number(o.isNo)));
     const fat=aOdm.reduce((s,o)=>s+(o.tutar||0),0);
     const tah=aOdm.reduce((s,o)=>s+(o.toplamOdenen||0),0);
     const kal=fat-tah;
@@ -5369,7 +5439,7 @@ function renderVade(){
 
   const allVadeEntries=[];
   DB.odemeler.filter(o=>!o.arsiv).forEach(o=>{
-    const musteri=o.musteri||getMusteri(o.isNo)||'—';
+    const musteri=o.musteri||(o.isNo!=null?getMusteri(o.isNo):'')||'—';
     if(o.vadeler && o.vadeler.length>0){
       o.vadeler.forEach((v,i)=>{
         if(!v.tarih || !v.tutar) return;
@@ -5410,8 +5480,8 @@ function renderVade(){
       <div style="text-align:center;padding:20px;color:var(--green)">✓ ${title} — Gecikmiş ödeme yok</div></div>`;
     if(list.length===0) return '';
     const rows=list.map(o=>{
-      const musteri=o.musteri||getMusteri(o.isNo)||'—';
-      const tad=DB.tadilatlar.find(t=>t.id===o.isNo);
+      const musteri=o.musteri||(o.isNo!=null?getMusteri(o.isNo):'')||'—';
+      const tad=o.isNo!=null?DB.tadilatlar.find(t=>t.id===Number(o.isNo)):null;
       return `<tr>
         <td class="mono">#${o.isNo}</td>
         <td><div class="font-medium">${esc(o.musteri)||'—'}</div>
@@ -5453,7 +5523,7 @@ function renderMusteriKarti(){
     res.innerHTML='<div class="card" style="text-align:center;padding:40px;color:var(--text3)">Eşleşen kayıt bulunamadı</div>'; return;
   }
   const musteri=isler[0].musteri||'';
-  const tad2odm=id=>DB.odemeler.find(o=>o.isNo===id);
+  const tad2odm=id=>DB.odemeler.find(o=>o.isNo!=null && Number(o.isNo)===id);
   const toplamFat=isler.reduce((s,t)=>{const o=tad2odm(t.id);return s+(o?.tutar||0);},0);
   const toplamKal=isler.reduce((s,t)=>{const o=tad2odm(t.id);return s+(o?.kalan||0);},0);
   const tel=isler[0].tel||'—';
@@ -5833,7 +5903,7 @@ function hdOtomatikGelirEkle(odeme, eskiToplamOdenen){
 
   // Güncel toplam tutarı tek kayıt olarak ekle
   // FIX4: Bugunun tarihi degil, is emrinin tarihini kullan
-  const _ilgiliIs = DB.tadilatlar.find(t=>t.id===odeme.isNo);
+  const _ilgiliIs = odeme.isNo!=null ? DB.tadilatlar.find(t=>t.id===Number(odeme.isNo)) : null;
   const _odTarih = _ilgiliIs ? (_ilgiliIs.tarih||today()) : today();
   DB.hesapDefteri.push({
     id: (typeof crypto!=='undefined'&&crypto.randomUUID) ? crypto.randomUUID() : Date.now()+'',
@@ -6558,7 +6628,7 @@ function tadExportExcel(){
     const ustalar = (t.ustalar||[{usta:t.usta||'—',isTipi:t.isTipi||'',fiyat:0}]);
     const ustaTxt = ustalar.map(u=>[u.usta, u.isTipi].filter(Boolean).join(' / ')).join(' | ');
     const topHak  = ustalar.reduce((s,u)=>s+(u.fiyat||getFiyat(u.usta,u.isTipi)||0),0);
-    const odm = DB.odemeler.find(o=>o.isNo===t.id);
+    const odm = DB.odemeler.find(o=>o.isNo!=null && Number(o.isNo)===t.id);
     const odmDur = odm ? (odm.kalan>0 ? `Kalan: ${fn(odm.kalan)} ₺` : '✓ Ödendi') : 'Ödeme Kaydı Yok';
     rows.push([
       '#'+t.id,
@@ -6633,16 +6703,16 @@ function _getOdmExportData(){
   // Tarih filtresi: ödemenin bağlı olduğu iş emrinin tarihine göre
   if(bas || bit){
     list = list.filter(o=>{
-      const tad = DB.tadilatlar.find(t=>t.id===o.isNo);
+      const tad = o.isNo!=null ? DB.tadilatlar.find(t=>t.id===Number(o.isNo)) : null;
       const d = tad ? (tad.baslama||tad.tarih||'') : '';
       return (!bas||d>=bas) && (!bit||d<=bit);
     });
   }
   if(dur) list = list.filter(o=>o.durum===dur);
   list.sort((a,b)=>{
-    const ta=DB.tadilatlar.find(t=>t.id===a.isNo), tb=DB.tadilatlar.find(t=>t.id===b.isNo);
+    const ta=a.isNo!=null?DB.tadilatlar.find(t=>t.id===Number(a.isNo)):null, tb=b.isNo!=null?DB.tadilatlar.find(t=>t.id===Number(b.isNo)):null;
     const da=ta?(ta.baslama||ta.tarih||''):'', db=tb?(tb.baslama||tb.tarih||''):'';
-    return da.localeCompare(db);
+    return (da||'').localeCompare(db||'');
   });
   return {list, bas, bit};
 }
@@ -6697,7 +6767,7 @@ function odmExportExcel(){
       : (o.vade ? fmtDate(o.vade) : '—');
     rows.push([
       '#'+o.isNo,
-      o.musteri||getMusteri(o.isNo)||'—',
+      o.musteri||(o.isNo!=null?getMusteri(o.isNo):'')||'—',
       fn(o.tutar),
       fn(o.nakit),
       fn(o.kart),
@@ -6919,7 +6989,7 @@ function renderCariDetay(firmaId){
   const hareketHTML = tumHareketler.length === 0
     ? `<div style="text-align:center;padding:32px;color:var(--text3)">Henüz hareket kaydı yok</div>`
     : tumHareketler.map(h=>{
-        const isEmri = h.isEmriId ? DB.tadilatlar.find(t=>t.id===parseInt(h.isEmriId)) : null;
+        const isEmri = h.isEmriId ? DB.tadilatlar.find(t=>t.id===Number(h.isEmriId)) : null;
         return `<div style="display:flex;gap:12px;align-items:flex-start;padding:12px 16px;border-bottom:1px solid var(--border2);transition:background .1s;${h._virman?'background:rgba(188,140,255,.04)':''}" class="musteri-secim-item">
           <div style="width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;background:${h._virman?'rgba(188,140,255,.15)':h.tip==='borc'?'rgba(255,123,114,.15)':'rgba(63,185,80,.15)'}">
             ${h._virman?'⇄':h.tip==='borc'?'📤':'📥'}
