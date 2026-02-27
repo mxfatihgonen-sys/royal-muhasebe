@@ -4170,9 +4170,9 @@ function switchOdmTab(tab, btn){
   // Aktif olmayan tablardaki değerleri sıfırla — çift sayım önlenir
   const clrIfHidden = (id) => {
     const el = document.getElementById(id);
-    if(el && el.closest('.odm-tab') && el.closest('.odm-tab').style.display==='none') el.value='';
+    // Değerler korunuyor — sekme değişince sıfırlama yapılmıyor
   };
-  ['f-odm-nakit','f-odm-kart','f-odm-havale','f-odm-cek','f-odm-simdi'].forEach(clrIfHidden);
+  // ['f-odm-nakit','f-odm-kart','f-odm-havale','f-odm-cek','f-odm-simdi'].forEach(clrIfHidden);
   calcOdeme();
 }
 
