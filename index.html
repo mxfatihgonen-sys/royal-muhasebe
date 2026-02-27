@@ -2376,6 +2376,21 @@ tbody td.mono{font-family:var(--mono);font-size:12px}
 <script>
 
 // ══════════════════════════════════════════════════
+
+// UUID doğrulama ve dönüştürme yardımcısı
+function _toUUID(id) {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(id) ? id : crypto.randomUUID();
+}
+function _ensureUUIDs(arr) {
+  return arr.map(item => {
+    if(!item.id || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(item.id)) {
+      const newId = crypto.randomUUID();
+      item.id = newId; // orijinal objeyi de güncelle
+    }
+    return {...item};
+  });
+}
 const STORAGE_KEY = 'dogalgaz_v9';
 
 // ══════════════════════════════════════════════════════════════
@@ -3473,24 +3488,12 @@ async function _doSave(){
     if(DB.odemeler?.length) {
       await _supabase.from('odemeler').upsert(DB.odemeler, {onConflict:'id'});
     }
-    if(DB.hesapDefteri?.length) {
-      await _supabase.from('hesap_defteri').upsert(DB.hesapDefteri, {onConflict:'id'});
-    }
-    if(DB.cariFirmalar?.length) {
-      await _supabase.from('cari_firmalar').upsert(DB.cariFirmalar, {onConflict:'id'});
-    }
-    if(DB.cariHareketler?.length) {
-      await _supabase.from('cari_hareketler').upsert(DB.cariHareketler, {onConflict:'id'});
-    }
-    if(DB.virmanlar?.length) {
-      await _supabase.from('virmanlar').upsert(DB.virmanlar, {onConflict:'id'});
-    }
-    if(DB.personeller?.length) {
-      await _supabase.from('personeller').upsert(DB.personeller, {onConflict:'id'});
-    }
-    if(DB.personelIslemler?.length) {
-      await _supabase.from('personel_islemler').upsert(DB.personelIslemler, {onConflict:'id'});
-    }
+    if(DB.hesapDefteri?.length) { await _supabase.from('hesap_defteri').upsert(_ensureUUIDs(DB.hesapDefteri), {onConflict:'id'}); }
+    if(DB.cariFirmalar?.length) { await _supabase.from('cari_firmalar').upsert(_ensureUUIDs(DB.cariFirmalar), {onConflict:'id'}); }
+    if(DB.cariHareketler?.length) { await _supabase.from('cari_hareketler').upsert(_ensureUUIDs(DB.cariHareketler), {onConflict:'id'}); }
+    if(DB.virmanlar?.length) { await _supabase.from('virmanlar').upsert(_ensureUUIDs(DB.virmanlar), {onConflict:'id'}); }
+    if(DB.personeller?.length) { await _supabase.from('personeller').upsert(_ensureUUIDs(DB.personeller), {onConflict:'id'}); }
+    if(DB.personelIslemler?.length) { await _supabase.from('personel_islemler').upsert(_ensureUUIDs(DB.personelIslemler), {onConflict:'id'}); }
     // JSON blob tablolar
     await _supabase.from('tanimlar').upsert([{id: '00000000-0000-0000-0000-000000000001', data: DB.tanimlar}], {onConflict:'id'});
     await _supabase.from('fiyatlar').upsert([{id: '00000000-0000-0000-0000-000000000001', data: DB.fiyatlar}], {onConflict:'id'});
