@@ -2386,10 +2386,27 @@ function _ensureUUIDs(arr) {
   return arr.map(item => {
     if(!item.id || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(item.id)) {
       const newId = crypto.randomUUID();
-      item.id = newId; // orijinal objeyi de güncelle
+      item.id = newId;
     }
     return {...item};
   });
+}
+
+// Tüm obje key'lerini küçük harfe çevir (Supabase büyük harf kabul etmiyor)
+function _lowerKeys(obj) {
+  if(Array.isArray(obj)) return obj.map(_lowerKeys);
+  if(obj && typeof obj === 'object') {
+    return Object.fromEntries(
+      Object.entries(obj).map(([k, v]) => [
+        k.toLowerCase(),
+        v && typeof v === 'object' && !Array.isArray(v) ? v : v
+      ])
+    );
+  }
+  return obj;
+}
+function _prepArr(arr) {
+  return _ensureUUIDs(arr).map(item => _lowerKeys(item));
 }
 const STORAGE_KEY = 'dogalgaz_v9';
 
@@ -3477,56 +3494,64 @@ async function _doSave(){
   }
   // Supabase'e kaydet
   try {
-    // Basit tablolar — upsert
+    const saves = [];
+
     if(DB.tadilatlar?.length) {
-      const tadilatlarData = DB.tadilatlar.map(t => {
+      const data = DB.tadilatlar.map(t => {
         const {seriNo, isTipi, ...rest} = t;
-        return {...rest, serino: seriNo, istipi: isTipi};
+        return _lowerKeys({...rest, serino: seriNo, istipi: isTipi});
       });
-      await _supabase.from('tadilatlar').upsert(tadilatlarData, {onConflict:'id'});
+      saves.push(_supabase.from('tadilatlar').upsert(data, {onConflict:'id'}));
     }
+
     if(DB.odemeler?.length) {
-      const odemelerData = DB.odemeler.map(o => {
-        const {isNo, taksitOdenen, taksitTutar, havaleBanka, havaleRef, cekTarih, cekNo, cekDurum, ...rest} = o;
-        return {
-          ...rest,
-          isno: isNo,
-          taksitodenen: taksitOdenen,
-          taksittutar: taksitTutar,
-          havaleref: havaleRef,
-          cektarih: cekTarih,
-          cekno: cekNo,
-          cekdurum: cekDurum
-        };
-      });
-      await _supabase.from('odemeler').upsert(odemelerData, {onConflict:'id'});
+      saves.push(_supabase.from('odemeler').upsert(
+        DB.odemeler.map(o => _lowerKeys(o)), {onConflict:'id'}
+      ));
     }
+
     if(DB.hesapDefteri?.length) {
-      const hdData = _ensureUUIDs(DB.hesapDefteri).map(h => {
-        const {kaynakId, ...rest} = h;
-        return {...rest, kaynakid: kaynakId};
-      });
-      await _supabase.from('hesap_defteri').upsert(hdData, {onConflict:'id'});
+      saves.push(_supabase.from('hesap_defteri').upsert(
+        _prepArr(DB.hesapDefteri).map(h => { delete h.updated_at; return h; }),
+        {onConflict:'id'}
+      ));
     }
-    if(DB.cariFirmalar?.length) { await _supabase.from('cari_firmalar').upsert(_ensureUUIDs(DB.cariFirmalar), {onConflict:'id'}); }
-    if(DB.cariHareketler?.length) { await _supabase.from('cari_hareketler').upsert(_ensureUUIDs(DB.cariHareketler), {onConflict:'id'}); }
-    if(DB.virmanlar?.length) { await _supabase.from('virmanlar').upsert(_ensureUUIDs(DB.virmanlar), {onConflict:'id'}); }
-    if(DB.personeller?.length) {
-      const personelData = DB.personeller.map(p => {
-        const {hedefMaas, ...rest} = p;
-        return {...rest, hedefmaas: hedefMaas};
-      });
-      await _supabase.from('personeller').upsert(_ensureUUIDs(personelData), {onConflict:'id'});
+
+    if(DB.cariFirmalar?.length)
+      saves.push(_supabase.from('cari_firmalar').upsert(_prepArr(DB.cariFirmalar), {onConflict:'id'}));
+
+    if(DB.cariHareketler?.length)
+      saves.push(_supabase.from('cari_hareketler').upsert(_prepArr(DB.cariHareketler), {onConflict:'id'}));
+
+    if(DB.virmanlar?.length)
+      saves.push(_supabase.from('virmanlar').upsert(_prepArr(DB.virmanlar), {onConflict:'id'}));
+
+    if(DB.personeller?.length)
+      saves.push(_supabase.from('personeller').upsert(_prepArr(DB.personeller), {onConflict:'id'}));
+
+    if(DB.personelIslemler?.length)
+      saves.push(_supabase.from('personel_islemler').upsert(_prepArr(DB.personelIslemler), {onConflict:'id'}));
+
+    saves.push(_supabase.from('tanimlar').upsert(
+      [{id:'00000000-0000-0000-0000-000000000001', data: DB.tanimlar}], {onConflict:'id'}
+    ));
+    saves.push(_supabase.from('fiyatlar').upsert(
+      [{id:'00000000-0000-0000-0000-000000000001', data: DB.fiyatlar}], {onConflict:'id'}
+    ));
+    saves.push(_supabase.from('usta_odemeleri').upsert(
+      [{id:'00000000-0000-0000-0000-000000000001', data: DB.ustaOdemeleri}], {onConflict:'id'}
+    ));
+    saves.push(_supabase.from('sayac').update({nextid: DB.nextId}).eq('id','00000000-0000-0000-0000-000000000001'));
+
+    const results = await Promise.all(saves);
+    const errors = results.filter(r => r.error).map(r => r.error.message);
+    if(errors.length) {
+      console.error('Kayıt hataları:', errors);
+      toast('Bazı veriler kaydedilemedi: ' + errors[0], 'error');
+    } else {
+      const szEl = document.getElementById('storage-size-indicator');
+      if(szEl){ szEl.textContent = '☁ Kaydedildi'; szEl.style.color = 'var(--green)'; }
     }
-    if(DB.personelIslemler?.length) { await _supabase.from('personel_islemler').upsert(_ensureUUIDs(DB.personelIslemler), {onConflict:'id'}); }
-    // JSON blob tablolar
-    await _supabase.from('tanimlar').upsert([{id: '00000000-0000-0000-0000-000000000001', data: DB.tanimlar}], {onConflict:'id'});
-    await _supabase.from('fiyatlar').upsert([{id: '00000000-0000-0000-0000-000000000001', data: DB.fiyatlar}], {onConflict:'id'});
-    await _supabase.from('usta_odemeleri').upsert([{id: '00000000-0000-0000-0000-000000000001', data: DB.ustaOdemeleri}], {onConflict:'id'});
-    // Sayac
-    await _supabase.from('sayac').update({nextid: DB.nextId}).eq('id','00000000-0000-0000-0000-000000000001');
-    const szEl = document.getElementById('storage-size-indicator');
-    if(szEl){ szEl.textContent = '☁ Kaydedildi'; szEl.style.color = 'var(--green)'; }
   } catch(e) {
     console.error('saveDB hatası:', e);
     toast('Kayıt hatası: ' + e.message, 'error');
