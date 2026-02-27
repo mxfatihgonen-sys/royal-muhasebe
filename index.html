@@ -3505,9 +3505,17 @@ async function _doSave(){
     }
 
     if(DB.odemeler?.length) {
-      saves.push(_supabase.from('odemeler').upsert(
-        DB.odemeler.map(o => _lowerKeys(o)), {onConflict:'id'}
-      ));
+      const odemelerData = DB.odemeler
+        .filter(o => o.id && !isNaN(Number(o.id)))
+        .map(o => {
+          const row = _lowerKeys(o);
+          // bigint alanları — uuid ise null yap
+          if(row.isno && isNaN(Number(row.isno))) row.isno = null;
+          if(row.tadilatid && isNaN(Number(row.tadilatid))) row.tadilatid = null;
+          return row;
+        });
+      if(odemelerData.length)
+        saves.push(_supabase.from('odemeler').upsert(odemelerData, {onConflict:'id'}));
     }
 
     if(DB.hesapDefteri?.length) {
