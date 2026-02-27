@@ -4455,7 +4455,7 @@ async function saveOdeme(){
     hdOtomatikGelirEkle(obj, eskiToplamOdenen);
     toast('Ödeme güncellendi','success');
   } else {
-    obj.id=(typeof crypto!=='undefined'&&crypto.randomUUID)?crypto.randomUUID():Date.now();
+    obj.id=DB.nextId++;
     DB.odemeler.push(obj);
     hdOtomatikGelirEkle(obj, 0);
     toast('Ödeme eklendi','success');
